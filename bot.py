@@ -608,10 +608,22 @@ class BotApp:
         return buf.getvalue().strip().replace('الخطوط:', '').strip() or 'تمام'
 
     async def run(self):
-        await self.bot.set_my_commands([BotCommand(command='status', description='حالة البوت والكوتة'),
-                                        BotCommand(command='queue', description='الطابور'),
-                                        BotCommand(command='stop', description='إيقاف الشغل الحالي')])
-        await self.startup_report()
+        # الأوامر بتتسجّل مرة واحدة بس (لو اتغيرت)، وأي فشل هنا مش بيوقّع البوت (flood control مثلاً)
+        cmds = [BotCommand(command='status', description='حالة البوت والكوتة'),
+                BotCommand(command='queue', description='الطابور'),
+                BotCommand(command='stop', description='إيقاف الشغل الحالي')]
+        sig = ','.join('%s:%s' % (c.command, c.description) for c in cmds)
+        if self.store.data.get('cmds_sig') != sig:
+            try:
+                await self.bot.set_my_commands(cmds)
+                self.store.data['cmds_sig'] = sig
+                self.store.save()
+            except Exception as e:
+                log.warning('set_my_commands اتخطّت: %r', e)
+        try:
+            await self.startup_report()
+        except Exception as e:
+            log.warning('startup_report اتخطّت: %r', e)
         wk = asyncio.create_task(self.worker())
         try:
             await self.dp.start_polling(self.bot, polling_timeout=30, allowed_updates=['message', 'callback_query'])
